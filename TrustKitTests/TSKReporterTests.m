@@ -26,6 +26,12 @@
 
 #pragma mark Test suite
 
+// Used for testing a custom kTSKReporterClassName.
+@interface BackgroundReporter: TSKBackgroundReporter
+@end
+@implementation BackgroundReporter
+@end
+
 @interface TrustKit (TestSupport)
 @property (nonatomic) TSKBackgroundReporter *pinFailureReporter;
 @property (nonatomic, readonly, nullable) NSDictionary *configuration;
@@ -225,6 +231,30 @@ static NSString * const kTSKDefaultReportUri = @"https://overmind.datatheorem.co
                               expirationDate:nil];
     
     [NSThread sleepForTimeInterval:0.1];
+}
+
+- (void)testCustomReporter
+{
+    // Ensure that a pin validation notification triggers the upload of a report if the validation failed
+    // Initialize TrustKit so the reporter block is ready to receive notifications
+    NSString *customReporterClass = @"BackgroundReporter";
+    NSDictionary *trustKitConfig =
+    @{kTSKSwizzleNetworkDelegates: @NO,
+      kTSKReporterClassName: customReporterClass,
+      kTSKPinnedDomains :
+          @{
+              @"www.test.com" : @{
+                      kTSKEnforcePinning : @YES,
+                      kTSKExpirationDate : @"2019-01-01",
+                      kTSKPublicKeyAlgorithms : @[kTSKAlgorithmRsa2048],
+                      kTSKPublicKeyHashes : @[@"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", // Fake key
+                                              @"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=" // Fake key 2
+                                              ]}}};
+
+    _trustKit = [[TrustKit alloc] initWithConfiguration:trustKitConfig];
+
+    Class customReportClass = NSClassFromString(customReporterClass);
+    XCTAssertTrue([_trustKit.pinFailureReporter isKindOfClass:customReportClass]);
 }
 
 - (void)testIdentifierForVendor

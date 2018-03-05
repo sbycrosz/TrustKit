@@ -135,7 +135,15 @@ void TSKLog(NSString *format, ...)
         _pinFailureReporterQueue = dispatch_queue_create(kTSKPinFailureReporterQueueLabel, DISPATCH_QUEUE_SERIAL);
         
         // Create our reporter for sending pin validation failures; do this before hooking NSURLSession so we don't hook ourselves
-        _pinFailureReporter = [[TSKBackgroundReporter alloc] initAndRateLimitReports:YES];
+        Class pinFailureReporterClass = NSClassFromString(trustKitConfig[kTSKReporterClassName]);
+        if (!pinFailureReporterClass) {
+            pinFailureReporterClass = [TSKBackgroundReporter class];
+        } else if (![pinFailureReporterClass isSubclassOfClass:[TSKBackgroundReporter class]]) {
+            // Custom TSKBackgroundReporter classes may only inherit from their intended parent class.
+            [NSException raise:@"TrustKit configuration invalid"
+                        format:@"Cannot use a kTSKReporterClass that doesn't inherit from the TSKBackgroundReporter class"];
+        }
+        _pinFailureReporter = [[pinFailureReporterClass alloc] initAndRateLimitReports:YES];
         
         // Handle global configuration flags here
         // TSKIgnorePinningForUserDefinedTrustAnchors
