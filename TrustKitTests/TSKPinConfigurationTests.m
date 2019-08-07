@@ -66,6 +66,28 @@
     XCTAssertEqualObjects(serverConfigKey, @"unsecured.good.com", @"Did not receive a configuration for pinned subdomain");
 }
 
+- (void)testExplicitNotDisablePinningForSubdomainAdditionalDomainKeys
+{
+    NSDictionary *trustKitConfig;
+    trustKitConfig = parseTrustKitConfiguration(@{kTSKPinnedDomains : @{
+                                                          @"good.com" : @{
+                                                                  kTSKPublicKeyHashes : @[@"TQEtdMbmwFgYUifM4LDF+xgEtd0z69mPGmkp014d6ZY=",
+                                                                                          @"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                                                                                          ],
+                                                                  kTSKIncludeSubdomains: @YES},
+                                                          @"unsecured.good.com": @{
+                                                                  // When using this option, TrustKit should allow/require a policy for the subdomain
+                                                                  kTSKExcludeSubdomainFromParentPolicy: @NO,
+                                                                  kTSKPublicKeyHashes : @[@"TQEtdMbmwFgYUifM4LDF+xgEtd0z69mPGmkp014d6ZY=",
+                                                                                          @"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                                                                                          ],
+                                                                  }
+                                                          }
+                                                  });
+
+    NSString *serverConfigKey = getPinningConfigurationKeyForDomain(@"unsecured.good.com", trustKitConfig[kTSKPinnedDomains]);
+    XCTAssertEqualObjects(serverConfigKey, @"unsecured.good.com", @"Did not receive a configuration for pinned subdomain");
+}
 
 - (void)testDisablePinningForSubdomainWithoutParentAndNoPublicKey
 {
@@ -104,7 +126,6 @@
                                                  }),
                     @"Configuration with kTSKExcludeSubdomainFromParentPolicy must reject additional domain keys");
 }
-
 
 - (void)testNokTSKSwizzleNetworkDelegates
 {
@@ -302,6 +323,28 @@
     NSString *serverConfigKey = getPinningConfigurationKeyForDomain(@"www.good.com", trustKitConfig[kTSKPinnedDomains]);
     XCTAssertEqualObjects(serverConfigKey, @"www.good.com",
                           @"IncludeSubdomains took precedence over a more specialized configuration");
+}
+
+
+- (void)testIncludeSubdomainsEnabledAndOverlap
+{
+    NSDictionary *trustKitConfig;
+    trustKitConfig = parseTrustKitConfiguration(@{kTSKPinnedDomains :
+                                                      @{@"good.com" : @{
+                                                                kTSKIncludeSubdomains : @YES,
+                                                                kTSKPublicKeyHashes : @[@"TQEtdMbmwFgYUifM4LDF+xgEtd0z69mPGmkp014d6ZY=",
+                                                                                        @"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" // Fake key
+                                                                                        ]},
+                                                        @"www.good.com": @{
+                                                                kTSKIncludeSubdomains : @YES,
+                                                                kTSKPublicKeyHashes : @[@"iQMk4onrJJz/nwW1wCUR0Ycsh3omhbM+PqMEwNof/K0=",
+                                                                                        @"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" // Fake key
+                                                                                        ]}}});
+
+    // Ensure the configuration of www.good.com with a longer match takes precedence over the more general config for good.com
+    NSString *serverConfigKey = getPinningConfigurationKeyForDomain(@"foo.www.good.com", trustKitConfig[kTSKPinnedDomains]);
+    XCTAssertEqualObjects(serverConfigKey, @"www.good.com",
+                          @"Overlapping configurations with IncludeSubdomains did not use the most specific (longest) matching configuration");
 }
 
 
